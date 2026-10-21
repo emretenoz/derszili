@@ -13,6 +13,9 @@ class LessonAlarmReceiver : BroadcastReceiver() {
         val nextName = intent.getStringExtra(AlarmScheduler.EXTRA_NEXT_NAME).orEmpty()
         val nextTime = intent.getStringExtra(AlarmScheduler.EXTRA_NEXT_TIME).orEmpty()
         val reminderMinutes = intent.getIntExtra(AlarmScheduler.EXTRA_REMINDER_MINUTES, 5)
+        val vibrationMode = VibrationMode.fromStorage(
+            intent.getStringExtra(AlarmScheduler.EXTRA_VIBRATION_MODE)
+        )
         val id = intent.getIntExtra(AlarmScheduler.EXTRA_NOTIFICATION_ID, lessonName.hashCode())
 
         if (event == AlarmScheduler.EVENT_START) {
@@ -23,6 +26,7 @@ class LessonAlarmReceiver : BroadcastReceiver() {
                 id,
                 title,
                 "Hazırlanma zamanı$location",
+                vibrationMode,
             )
         } else {
             val message = if (nextName.isBlank()) {
@@ -30,7 +34,7 @@ class LessonAlarmReceiver : BroadcastReceiver() {
             } else {
                 "Sıradaki: $nextName • $nextTime"
             }
-            NotificationHelper.show(context, id, "$lessonName bitti", message)
+            NotificationHelper.show(context, id, "$lessonName bitti", message, vibrationMode)
         }
 
         // Ufku günde bir kez, son ders bitince ve yayın alıcısını bloklamadan uzat.

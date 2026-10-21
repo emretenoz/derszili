@@ -12,29 +12,34 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 object NotificationHelper {
-    const val CHANNEL_ID = "lesson_alerts"
-
-    fun createChannel(context: Context) {
+    fun createChannel(context: Context, vibrationMode: VibrationMode = VibrationMode.NORMAL) {
         val manager = context.getSystemService(NotificationManager::class.java)
         val audio = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
             .build()
         val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Ders uyarıları",
+            channelId(vibrationMode),
+            "Ders uyarıları • ${vibrationMode.label()}",
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "Ders başlangıç ve bitiş hatırlatmaları"
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 250, 120, 250)
+            val pattern = vibrationMode.pattern()
+            enableVibration(pattern != null)
+            if (pattern != null) vibrationPattern = pattern
             setSound(null, audio)
         }
         manager.createNotificationChannel(channel)
     }
 
     @SuppressLint("MissingPermission")
-    fun show(context: Context, notificationId: Int, title: String, message: String) {
-        createChannel(context)
+    fun show(
+        context: Context,
+        notificationId: Int,
+        title: String,
+        message: String,
+        vibrationMode: VibrationMode = VibrationMode.NORMAL,
+    ) {
+        createChannel(context, vibrationMode)
         if (
             android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -49,7 +54,7 @@ object NotificationHelper {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, channelId(vibrationMode))
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
             .setContentText(message)
@@ -57,10 +62,28 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
-            .setVibrate(longArrayOf(0, 250, 120, 250))
-            .apply { if (contentIntent != null) setContentIntent(contentIntent) }
+            .apply {
+                vibrationMode.pattern()?.let(::setVibrate)
+                if (contentIntent != null) setContentIntent(contentIntent)
+            }
             .build()
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
+    }
+
+    private fun channelId(mode: VibrationMode): String = "lesson_alerts_${mode.name.lowercase()}"
+
+    private fun VibrationMode.pattern(): LongArray? = when (this) {
+        VibrationMode.GENTLE -> longArrayOf(0, 120)
+        VibrationMode.NORMAL -> longArrayOf(0, 250, 120, 250)
+        VibrationMode.STRONG -> longArrayOf(0, 350, 140, 350, 140, 500)
+        VibrationMode.OFF -> null
+    }
+
+    private fun VibrationMode.label(): String = when (this) {
+        VibrationMode.GENTLE -> "Kısa"
+        VibrationMode.NORMAL -> "Normal"
+        VibrationMode.STRONG -> "Güçlü"
+        VibrationMode.OFF -> "Sessiz"
     }
 }

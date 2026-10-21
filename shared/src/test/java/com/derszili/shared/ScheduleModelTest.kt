@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
+import java.time.LocalDateTime
 
 class ScheduleModelTest {
     private val math = Lesson(
@@ -20,6 +21,7 @@ class ScheduleModelTest {
         val schedule = SchoolSchedule(
             lessons = listOf(math),
             reminderMinutes = 10,
+            vibrationMode = VibrationMode.STRONG,
             updatedAt = 1234L,
         )
 
@@ -57,5 +59,48 @@ class ScheduleModelTest {
     @Test
     fun `editing lesson does not overlap with itself`() {
         assertNull(SchoolSchedule(lessons = listOf(math)).findOverlap(math.copy(name = "Yeni ad")))
+    }
+
+    @Test
+    fun `legacy schedule defaults to normal vibration`() {
+        val raw = """{"lessons":[],"reminderMinutes":5,"updatedAt":12}"""
+
+        assertEquals(VibrationMode.NORMAL, scheduleFromJsonOrNull(raw)?.vibrationMode)
+    }
+
+    @Test
+    fun `countdown shows lesson end while lesson is active`() {
+        val now = LocalDateTime.of(2024, 1, 1, 9, 30)
+
+        val countdown = SchoolSchedule(lessons = listOf(math)).countdownAt(now)
+
+        assertEquals(CountdownKind.UNTIL_END, countdown?.kind)
+        assertEquals(math, countdown?.lesson)
+        assertEquals(30L, countdown?.remainingMinutes)
+    }
+
+    @Test
+    fun `countdown finds next lesson across days`() {
+        val tuesdayLesson = math.copy(id = "physics", name = "Fizik", dayOfWeek = 2)
+        val now = LocalDateTime.of(2024, 1, 1, 18, 0)
+
+        val countdown = SchoolSchedule(lessons = listOf(tuesdayLesson)).countdownAt(now)
+
+        assertEquals(CountdownKind.UNTIL_START, countdown?.kind)
+        assertEquals(tuesdayLesson, countdown?.lesson)
+        assertEquals(15 * 60L, countdown?.remainingMinutes)
+    }
+
+    @Test
+    fun `remaining time label stays compact`() {
+        assertEquals("8 dk", remainingTimeLabel(8))
+        assertEquals("1 sa 5 dk", remainingTimeLabel(65))
+        assertEquals("2 gün 3 sa", remainingTimeLabel(3060))
+    }
+
+    @Test
+    fun `short day names keep friday and saturday distinct`() {
+        assertEquals("Cum", dayShortName(5))
+        assertEquals("Cmt", dayShortName(6))
     }
 }

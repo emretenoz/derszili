@@ -1,6 +1,7 @@
 package com.derszili.wear
 
 import com.derszili.shared.AlarmScheduler
+import com.derszili.shared.NotificationHelper
 import com.derszili.shared.ScheduleStore
 import com.derszili.shared.SchoolSchedule
 import com.derszili.shared.scheduleFromJsonOrNull
@@ -22,6 +23,7 @@ class ScheduleDataService : WearableListenerService() {
         val latest = candidates.maxByOrNull { it.updatedAt } ?: return
         if (latest.updatedAt > ScheduleStore.load(this).updatedAt) {
             ScheduleStore.save(this, latest)
+            NotificationHelper.createChannel(this, latest.vibrationMode)
             AlarmScheduler.schedule(this, latest)
         }
     }

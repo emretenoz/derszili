@@ -3,8 +3,33 @@ package com.derszili.shared
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
+
+enum class VibrationMode {
+    GENTLE,
+    NORMAL,
+    STRONG,
+    OFF;
+
+    companion object {
+        fun fromStorage(value: String?): VibrationMode =
+            entries.firstOrNull { it.name == value } ?: NORMAL
+    }
+}
+
+enum class CountdownKind {
+    UNTIL_START,
+    UNTIL_END,
+}
+
+data class ScheduleCountdown(
+    val lesson: Lesson,
+    val kind: CountdownKind,
+    val target: LocalDateTime,
+    val remainingMinutes: Long,
+)
 
 data class Lesson(
     val id: String,
@@ -21,11 +46,13 @@ data class Lesson(
 data class SchoolSchedule(
     val lessons: List<Lesson> = emptyList(),
     val reminderMinutes: Int = 5,
+    val vibrationMode: VibrationMode = VibrationMode.NORMAL,
     val updatedAt: Long = 0L,
 )
 
 fun SchoolSchedule.toJson(): String = JSONObject().apply {
     put("reminderMinutes", reminderMinutes)
+    put("vibrationMode", vibrationMode.name)
     put("updatedAt", updatedAt)
     put("lessons", JSONArray().apply {
         lessons.forEach { lesson ->
@@ -70,6 +97,7 @@ fun scheduleFromJsonOrNull(raw: String?): SchoolSchedule? {
         SchoolSchedule(
             lessons = lessons,
             reminderMinutes = json.optInt("reminderMinutes", 5).coerceIn(0, 60),
+            vibrationMode = VibrationMode.fromStorage(json.optString("vibrationMode")),
             updatedAt = json.optLong("updatedAt", 0L),
         )
     }.getOrNull()
@@ -97,6 +125,16 @@ fun dayName(day: Int): String = when (day) {
     else -> "Pazar"
 }
 
+fun dayShortName(day: Int): String = when (day) {
+    1 -> "Pzt"
+    2 -> "Sal"
+    3 -> "Çar"
+    4 -> "Per"
+    5 -> "Cum"
+    6 -> "Cmt"
+    else -> "Paz"
+}
+
 fun Lesson.startAt(dateTime: LocalDateTime): LocalDateTime =
     dateTime.toLocalDate().atTime(LocalTime.of(startMinutes / 60, startMinutes % 60))
 
@@ -108,3 +146,54 @@ fun SchoolSchedule.lessonsFor(day: DayOfWeek): List<Lesson> =
 
 fun SchoolSchedule.nextLessonAfter(day: DayOfWeek, minuteOfDay: Int): Lesson? =
     lessonsFor(day).firstOrNull { it.startMinutes >= minuteOfDay }
+
+fun SchoolSchedule.countdownAt(now: LocalDateTime): ScheduleCountdown? {
+    val current = lessonsFor(now.dayOfWeek).firstOrNull { lesson ->
+        val start = now.toLocalDate().atTime(lesson.startMinutes / 60, lesson.startMinutes % 60)
+        val end = now.toLocalDate().atTime(lesson.endMinutes / 60, lesson.endMinutes % 60)
+        !now.isBefore(start) && now.isBefore(end)
+    }
+    if (current != null) {
+        val target = current.endAt(now)
+        return ScheduleCountdown(
+            lesson = current,
+            kind = CountdownKind.UNTIL_END,
+            target = target,
+            remainingMinutes = roundedUpMinutes(now, target),
+        )
+    }
+
+    val next = (0L..7L).flatMap { offset ->
+        val date = now.toLocalDate().plusDays(offset)
+        lessons
+            .asSequence()
+            .filter { it.dayOfWeek == date.dayOfWeek.value }
+            .map { lesson -> lesson to date.atTime(lesson.startMinutes / 60, lesson.startMinutes % 60) }
+            .filter { (_, start) -> start.isAfter(now) }
+            .toList()
+    }.minByOrNull { (_, start) -> start } ?: return null
+
+    return ScheduleCountdown(
+        lesson = next.first,
+        kind = CountdownKind.UNTIL_START,
+        target = next.second,
+        remainingMinutes = roundedUpMinutes(now, next.second),
+    )
+}
+
+fun remainingTimeLabel(minutes: Long): String {
+    val safeMinutes = minutes.coerceAtLeast(0)
+    val days = safeMinutes / (24 * 60)
+    val hours = (safeMinutes % (24 * 60)) / 60
+    val mins = safeMinutes % 60
+    return when {
+        days > 0 -> if (hours > 0) "$days gün $hours sa" else "$days gün"
+        hours > 0 -> if (mins > 0) "$hours sa $mins dk" else "$hours sa"
+        else -> "$mins dk"
+    }
+}
+
+private fun roundedUpMinutes(from: LocalDateTime, to: LocalDateTime): Long {
+    val seconds = Duration.between(from, to).seconds.coerceAtLeast(0)
+    return (seconds + 59) / 60
+}

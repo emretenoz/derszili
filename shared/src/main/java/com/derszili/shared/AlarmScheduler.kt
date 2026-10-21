@@ -17,6 +17,7 @@ object AlarmScheduler {
     const val EXTRA_NEXT_NAME = "next_name"
     const val EXTRA_NEXT_TIME = "next_time"
     const val EXTRA_REMINDER_MINUTES = "reminder_minutes"
+    const val EXTRA_VIBRATION_MODE = "vibration_mode"
     const val EXTRA_NOTIFICATION_ID = "notification_id"
     const val EVENT_START = "start"
     const val EVENT_END = "end"
@@ -68,6 +69,7 @@ object AlarmScheduler {
                             lesson = lesson,
                             next = null,
                             reminderMinutes = schedule.reminderMinutes,
+                            vibrationMode = schedule.vibrationMode,
                         ),
                     )
                     requestCodes += code
@@ -85,6 +87,7 @@ object AlarmScheduler {
                             lesson = lesson,
                             next = next,
                             reminderMinutes = schedule.reminderMinutes,
+                            vibrationMode = schedule.vibrationMode,
                         ),
                     )
                     requestCodes += code
@@ -124,6 +127,7 @@ object AlarmScheduler {
         lesson: Lesson,
         next: Lesson?,
         reminderMinutes: Int,
+        vibrationMode: VibrationMode,
     ): PendingIntent {
         val intent = Intent(context, LessonAlarmReceiver::class.java).apply {
             putExtra(EXTRA_EVENT, event)
@@ -132,6 +136,7 @@ object AlarmScheduler {
             putExtra(EXTRA_NEXT_NAME, next?.name.orEmpty())
             putExtra(EXTRA_NEXT_TIME, next?.startLabel.orEmpty())
             putExtra(EXTRA_REMINDER_MINUTES, reminderMinutes)
+            putExtra(EXTRA_VIBRATION_MODE, vibrationMode.name)
             putExtra(EXTRA_NOTIFICATION_ID, requestCode)
         }
         return PendingIntent.getBroadcast(

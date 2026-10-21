@@ -23,6 +23,15 @@ Telefon üzerinden haftalık ders programı oluşturup Galaxy Watch / Wear OS sa
 - Alarm yenilemesi yayın alıcısını bloklamadan arka planda yapılıyor.
 - Model testleri ve GitHub Actions doğrulaması eklendi.
 
+## Sürüm 1.2.0
+
+- Telefonda ve saatte mevcut ya da sıradaki derse canlı geri sayım eklendi.
+- Yeni ders saati, seçili günün son dersinden sonra otomatik hazırlanıyor.
+- Dersleri tek dokunuşla başka güne kopyalama ve hızlı ders adı/süre seçenekleri eklendi.
+- Uyarı zamanı seçenekleri 0–60 dakika aralığında genişletildi.
+- Kısa, normal, güçlü ve sessiz titreşim profilleri eklendi.
+- Telefon ve saat arayüzleri daha okunaklı kartlar ve belirgin durum renkleriyle yenilendi.
+
 ## Projeyi açma
 
 1. Android Studio'da bu klasörü açın.
