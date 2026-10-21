@@ -25,8 +25,18 @@ object AlarmScheduler {
     private const val KEY_IDS = "request_codes"
     private const val LOOK_AHEAD_DAYS = 14L
 
+    @Synchronized
     fun schedule(context: Context, schedule: SchoolSchedule) {
-        cancelAll(context)
+        scheduleInternal(context, schedule, replaceExisting = true)
+    }
+
+    @Synchronized
+    fun extend(context: Context) {
+        scheduleInternal(context, ScheduleStore.load(context), replaceExisting = false)
+    }
+
+    private fun scheduleInternal(context: Context, schedule: SchoolSchedule, replaceExisting: Boolean) {
+        if (replaceExisting) cancelAll(context)
         if (schedule.lessons.isEmpty()) return
 
         val manager = context.getSystemService(AlarmManager::class.java)

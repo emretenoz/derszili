@@ -10,16 +10,30 @@ object ScheduleSync {
     const val PATH = "/school_schedule"
     const val KEY_JSON = "schedule_json"
 
-    fun send(context: Context, schedule: SchoolSchedule, onResult: (Boolean) -> Unit = {}) {
+    enum class Result {
+        SENT_TO_CONNECTED_NETWORK,
+        QUEUED_UNTIL_CONNECTED,
+        FAILED,
+    }
+
+    fun send(context: Context, schedule: SchoolSchedule, onResult: (Result) -> Unit = {}) {
         val request = PutDataMapRequest.create(PATH).apply {
             dataMap.putString(KEY_JSON, schedule.toJson())
             // Değişiklik yokken bile kullanıcının elle eşitleyebilmesi için benzersiz değer.
             dataMap.putLong("sent_at", System.currentTimeMillis())
         }.asPutDataRequest().setUrgent()
 
-        Wearable.getDataClient(context)
-            .putDataItem(request)
-            .addOnSuccessListener { onResult(true) }
-            .addOnFailureListener { onResult(false) }
+        Wearable.getNodeClient(context).connectedNodes.addOnCompleteListener { nodeTask ->
+            val hasConnectedNode = nodeTask.isSuccessful && nodeTask.result.isNotEmpty()
+            Wearable.getDataClient(context)
+                .putDataItem(request)
+                .addOnSuccessListener {
+                    onResult(
+                        if (hasConnectedNode) Result.SENT_TO_CONNECTED_NETWORK
+                        else Result.QUEUED_UNTIL_CONNECTED
+                    )
+                }
+                .addOnFailureListener { onResult(Result.FAILED) }
+        }
     }
 }

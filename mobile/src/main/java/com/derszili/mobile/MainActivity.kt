@@ -50,7 +50,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +65,7 @@ import com.derszili.shared.Lesson
 import com.derszili.shared.ScheduleStore
 import com.derszili.shared.SchoolSchedule
 import com.derszili.shared.dayName
+import com.derszili.shared.findOverlap
 import com.derszili.shared.minutesToLabel
 import java.time.LocalDate
 import java.util.UUID
@@ -85,28 +85,26 @@ private val PageBackground = Color(0xFFF7F7FF)
 private fun DersZiliApp() {
     val context = LocalContext.current
     var schedule by remember { mutableStateOf(ScheduleStore.load(context)) }
-    var selectedDay by remember { mutableIntStateOf(LocalDate.now().dayOfWeek.value.coerceAtMost(5)) }
+    var selectedDay by remember { mutableIntStateOf(LocalDate.now().dayOfWeek.value) }
     var editingLesson by remember { mutableStateOf<Lesson?>(null) }
     var showEditor by remember { mutableStateOf(false) }
-    var syncText by remember { mutableStateOf("Saat bekleniyor") }
+    var syncText by remember { mutableStateOf("Eşitlemeye hazır") }
 
-    fun persist(updated: SchoolSchedule) {
-        schedule = updated.copy(updatedAt = System.currentTimeMillis())
-        ScheduleStore.save(context, schedule)
-        syncText = "Eşitleniyor…"
-        ScheduleSync.send(context, schedule) { ok ->
-            Handler(Looper.getMainLooper()).post {
-                syncText = if (ok) "Saatle eşitlendi" else "Saat bulunamadı"
+    fun updateSyncText(result: ScheduleSync.Result) {
+        Handler(Looper.getMainLooper()).post {
+            syncText = when (result) {
+                ScheduleSync.Result.SENT_TO_CONNECTED_NETWORK -> "Saat ağına gönderildi"
+                ScheduleSync.Result.QUEUED_UNTIL_CONNECTED -> "Saat çevrimdışı • sıraya alındı"
+                ScheduleSync.Result.FAILED -> "Gönderilemedi • tekrar dene"
             }
         }
     }
 
-    LaunchedEffect(Unit) {
-        ScheduleSync.send(context, schedule) { ok ->
-            Handler(Looper.getMainLooper()).post {
-                syncText = if (ok) "Saatle eşitlendi" else "Saat bulunamadı"
-            }
-        }
+    fun persist(updated: SchoolSchedule) {
+        schedule = updated.copy(updatedAt = maxOf(System.currentTimeMillis(), schedule.updatedAt + 1))
+        ScheduleStore.save(context, schedule)
+        syncText = "Eşitleniyor…"
+        ScheduleSync.send(context, schedule, ::updateSyncText)
     }
 
     MaterialTheme {
@@ -131,11 +129,7 @@ private fun DersZiliApp() {
                         FilledTonalButton(
                             onClick = {
                                 syncText = "Eşitleniyor…"
-                                ScheduleSync.send(context, schedule) { ok ->
-                                    Handler(Looper.getMainLooper()).post {
-                                        syncText = if (ok) "Saatle eşitlendi" else "Saat bulunamadı"
-                                    }
-                                }
+                                ScheduleSync.send(context, schedule, ::updateSyncText)
                             },
                             modifier = Modifier.padding(end = 12.dp),
                         ) { Text("Eşitle") }
@@ -190,6 +184,7 @@ private fun DersZiliApp() {
             LessonEditor(
                 initial = editingLesson,
                 defaultDay = selectedDay,
+                existingLessons = schedule.lessons,
                 onDismiss = { showEditor = false },
                 onSave = { lesson ->
                     val updated = if (editingLesson == null) {
@@ -283,6 +278,7 @@ private fun LessonCard(lesson: Lesson, onEdit: () -> Unit, onDelete: () -> Unit)
 private fun LessonEditor(
     initial: Lesson?,
     defaultDay: Int,
+    existingLessons: List<Lesson>,
     onDismiss: () -> Unit,
     onSave: (Lesson) -> Unit,
 ) {
@@ -350,8 +346,8 @@ private fun LessonEditor(
                 when {
                     name.isBlank() -> error = "Ders adını yazmalısın."
                     end <= start -> error = "Bitiş saati başlangıçtan sonra olmalı."
-                    else -> onSave(
-                        Lesson(
+                    else -> {
+                        val candidate = Lesson(
                             id = initial?.id ?: UUID.randomUUID().toString(),
                             name = name.trim(),
                             room = room.trim(),
@@ -359,7 +355,13 @@ private fun LessonEditor(
                             startMinutes = start,
                             endMinutes = end,
                         )
-                    )
+                        val overlap = SchoolSchedule(lessons = existingLessons).findOverlap(candidate)
+                        if (overlap != null) {
+                            error = "Bu saat aralığı ${overlap.name} dersiyle çakışıyor."
+                        } else {
+                            onSave(candidate)
+                        }
+                    }
                 }
             }) { Text("Kaydet") }
         },

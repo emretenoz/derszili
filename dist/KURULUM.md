@@ -16,8 +16,10 @@
 ## 3. İlk kullanım
 
 1. Saatte **Ders Zili** uygulamasını aç.
-2. Bildirim iznini ver. Kesin alarm izni otomatik uygulanır.
+2. Bildirim iznini ver. Uygulama isterse kesin alarm iznini saat ayarlarından aç.
 3. Telefonda Ders Zili'ni aç, derslerini ekle ve **Eşitle** düğmesine bas.
 4. Saat uygulamasını tekrar açtığında bugünkü program görünür.
+
+Telefon, saat çevrimdışıysa programı kuyrukta tutar. Üstte **Saat çevrimdışı • sıraya alındı** yazısını görebilirsin; saat tekrar bağlandığında Wear OS veri katmanı programı iletir. İlk açılışta telefondaki boş program otomatik gönderilmez, böylece saatteki mevcut program korunur.
 
 Bu APK'lar test amaçlı debug imzası taşır. Google Play'e yüklemek için release imzalı App Bundle üretilmelidir.

@@ -3,6 +3,7 @@ package com.derszili.shared
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import java.util.concurrent.Executors
 
 class LessonAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -32,7 +33,20 @@ class LessonAlarmReceiver : BroadcastReceiver() {
             NotificationHelper.show(context, id, "$lessonName bitti", message)
         }
 
-        // Her alarm çalıştığında ileri tarihli haftayı tazele.
-        AlarmScheduler.schedule(context, ScheduleStore.load(context))
+        // Ufku günde bir kez, son ders bitince ve yayın alıcısını bloklamadan uzat.
+        if (event == AlarmScheduler.EVENT_END && nextName.isBlank()) {
+            val pendingResult = goAsync()
+            schedulerExecutor.execute {
+                try {
+                    AlarmScheduler.extend(context)
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+        }
+    }
+
+    companion object {
+        private val schedulerExecutor = Executors.newSingleThreadExecutor()
     }
 }

@@ -48,6 +48,7 @@ import com.derszili.shared.NotificationHelper
 import com.derszili.shared.ScheduleStore
 import com.derszili.shared.SchoolSchedule
 import com.derszili.shared.dayName
+import com.derszili.shared.scheduleFromJsonOrNull
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.delay
@@ -67,15 +68,24 @@ class MainActivity : ComponentActivity() {
 
     private fun readLatestSchedule() {
         Wearable.getDataClient(this).dataItems.addOnSuccessListener { items ->
-            try {
-                items.firstOrNull { it.uri.path == ScheduleDataService.PATH }?.let { item ->
-                    val json = DataMapItem.fromDataItem(item).dataMap.getString(ScheduleDataService.KEY_JSON)
-                    val schedule = com.derszili.shared.scheduleFromJson(json)
-                    ScheduleStore.save(this, schedule)
-                    AlarmScheduler.schedule(this, schedule)
-                }
+            val latest = try {
+                items
+                    .filter { it.uri.path == ScheduleDataService.PATH }
+                    .mapNotNull { item ->
+                        val json = DataMapItem.fromDataItem(item).dataMap
+                            .getString(ScheduleDataService.KEY_JSON)
+                        scheduleFromJsonOrNull(json)
+                    }
+                    .maxByOrNull { it.updatedAt }
             } finally {
                 items.release()
+            }
+
+            if (latest != null && latest.updatedAt > ScheduleStore.load(this).updatedAt) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    ScheduleStore.save(this@MainActivity, latest)
+                    AlarmScheduler.schedule(this@MainActivity, latest)
+                }
             }
         }
     }

@@ -21,7 +21,7 @@ data class Lesson(
 data class SchoolSchedule(
     val lessons: List<Lesson> = emptyList(),
     val reminderMinutes: Int = 5,
-    val updatedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = 0L,
 )
 
 fun SchoolSchedule.toJson(): String = JSONObject().apply {
@@ -41,24 +41,30 @@ fun SchoolSchedule.toJson(): String = JSONObject().apply {
     })
 }.toString()
 
-fun scheduleFromJson(raw: String?): SchoolSchedule {
-    if (raw.isNullOrBlank()) return SchoolSchedule()
+fun scheduleFromJsonOrNull(raw: String?): SchoolSchedule? {
+    if (raw.isNullOrBlank()) return null
     return runCatching {
         val json = JSONObject(raw)
-        val array = json.optJSONArray("lessons") ?: JSONArray()
+        val array = json.getJSONArray("lessons")
+        val ids = mutableSetOf<String>()
         val lessons = buildList {
             for (index in 0 until array.length()) {
                 val item = array.getJSONObject(index)
-                add(
-                    Lesson(
-                        id = item.getString("id"),
-                        name = item.getString("name"),
-                        room = item.optString("room"),
-                        dayOfWeek = item.getInt("dayOfWeek"),
-                        startMinutes = item.getInt("startMinutes"),
-                        endMinutes = item.getInt("endMinutes"),
-                    )
+                val lesson = Lesson(
+                    id = item.getString("id").trim(),
+                    name = item.getString("name").trim(),
+                    room = item.optString("room").trim(),
+                    dayOfWeek = item.getInt("dayOfWeek"),
+                    startMinutes = item.getInt("startMinutes"),
+                    endMinutes = item.getInt("endMinutes"),
                 )
+                require(lesson.id.isNotBlank() && ids.add(lesson.id))
+                require(lesson.name.isNotBlank())
+                require(lesson.dayOfWeek in 1..7)
+                require(lesson.startMinutes in 0 until 24 * 60)
+                require(lesson.endMinutes in 1..24 * 60)
+                require(lesson.endMinutes > lesson.startMinutes)
+                add(lesson)
             }
         }
         SchoolSchedule(
@@ -66,7 +72,17 @@ fun scheduleFromJson(raw: String?): SchoolSchedule {
             reminderMinutes = json.optInt("reminderMinutes", 5).coerceIn(0, 60),
             updatedAt = json.optLong("updatedAt", 0L),
         )
-    }.getOrDefault(SchoolSchedule())
+    }.getOrNull()
+}
+
+fun scheduleFromJson(raw: String?): SchoolSchedule =
+    scheduleFromJsonOrNull(raw) ?: SchoolSchedule()
+
+fun SchoolSchedule.findOverlap(candidate: Lesson): Lesson? = lessons.firstOrNull { lesson ->
+    lesson.id != candidate.id &&
+        lesson.dayOfWeek == candidate.dayOfWeek &&
+        candidate.startMinutes < lesson.endMinutes &&
+        candidate.endMinutes > lesson.startMinutes
 }
 
 fun minutesToLabel(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
